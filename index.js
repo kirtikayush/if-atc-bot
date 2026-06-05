@@ -71,6 +71,7 @@ function getGTADS(atcFacilities = []) {
   if (types.includes(1)) result += "T";
   if (types.includes(4)) result += "A";
   if (types.includes(5)) result += "D";
+  if (types.includes(7)) result += "S";
 
   return result || "—";
 }
