@@ -345,7 +345,7 @@ client.on("interactionCreate", async (interaction) => {
 
       const output = top10
         .map((a, i) => {
-          const atc = a.gtads === "—" ? "⚫ Uncontrolled" : `🟢 ${a.gtads}`;
+          const atc = a.gtads === "—" ? "⚫" : `🟢 ${a.gtads}`;
 
           if (mode === "total") {
             return (
@@ -356,7 +356,7 @@ client.on("interactionCreate", async (interaction) => {
           }
 
           return (
-            `**#${i + 1} ${a.icao}** ${atc}\n` +
+            `# ${i + 1} ${a.icao} - ${atc}\n` +
             `20m: ${String(a.next20).padStart(3)} | ` +
             `60m: ${String(a.next60).padStart(3)} | ` +
             `Total: ${String(a.inbound).padStart(3)}`
