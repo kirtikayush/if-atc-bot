@@ -350,9 +350,10 @@ client.on("interactionCreate", async (interaction) => {
 
           if (mode === "total") {
             return (
-              `**${i + 1}. ${a.icao}** ${atc}\n` +
-              `📥 Inbound: ${a.inbound}\n` +
-              `📤 Outbound: ${a.outbound}`
+              `**${i + 1} ${a.icao} - ${atc}\n**` +
+              `20m: ${String(a.next20).padStart(3)} | ` +
+              `60m: ${String(a.next60).padStart(3)} | ` +
+              `Total: ${String(a.inbound).padStart(3)}`
             );
           }
 
