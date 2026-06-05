@@ -18,7 +18,17 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("inbound")
-    .setDescription("Top 10 airports by inbound traffic"),
+    .setDescription("Inbound traffic statistics")
+    .addStringOption((option) =>
+      option
+        .setName("mode")
+        .setDescription("Sort mode")
+        .setRequired(false)
+        .addChoices(
+          { name: "Hour", value: "hour" },
+          { name: "Total", value: "total" },
+        ),
+    ),
 ].map((cmd) => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);

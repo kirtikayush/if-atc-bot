@@ -5,6 +5,8 @@ import {
   getActiveATC,
   getSessionId,
   getWorldOverview,
+  getFlights,
+  getAirportInfo,
 } from "./infiniteFlight.js";
 import { parseATIS } from "./atisParser.js";
 
@@ -20,6 +22,58 @@ const client = new Client({
 
 const ATC_CHANNEL_ID = process.env.ATC_CHANNEL_ID;
 
+const airportCache = new Map();
+
+async function getAirportCoords(icao) {
+  const key = icao.toUpperCase();
+
+  if (airportCache.has(key)) {
+    return airportCache.get(key);
+  }
+
+  const airport = await getAirportInfo(key);
+
+  if (!airport) return null;
+
+  const coords = {
+    lat: airport.latitude,
+    lon: airport.longitude,
+  };
+
+  airportCache.set(key, coords);
+
+  return coords;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+function distanceNm(lat1, lon1, lat2, lon2) {
+  const R = 3440.065;
+
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getGTADS(atcFacilities = []) {
+  const types = atcFacilities.map((f) => f.type);
+
+  let result = "";
+
+  if (types.includes(0)) result += "G";
+  if (types.includes(1)) result += "T";
+  if (types.includes(4)) result += "A";
+  if (types.includes(5)) result += "D";
+
+  return result || "—";
+}
 // =====================
 // ATC HELPERS
 // =====================
@@ -86,17 +140,17 @@ function formatParsedATIS(parsed) {
   ].join("\n");
 }
 
-function formatInboundWithOutbound(worldData) {
-  return worldData
-    .filter((a) => a.inboundFlightsCount > 0)
-    .sort((a, b) => b.inboundFlightsCount - a.inboundFlightsCount)
-    .slice(0, 10)
-    .map(
-      (a, i) =>
-        `**${i + 1}. ${a.airportIcao}** — ✈️ In: ${a.inboundFlightsCount} | Out: ${a.outboundFlightsCount}`,
-    )
-    .join("\n");
-}
+// function formatInboundWithOutbound(worldData) {
+//   return worldData
+//     .filter((a) => a.inboundFlightsCount > 0)
+//     .sort((a, b) => b.inboundFlightsCount - a.inboundFlightsCount)
+//     .slice(0, 10)
+//     .map(
+//       (a, i) =>
+//         `**${i + 1}. ${a.airportIcao}** — ✈️ In: ${a.inboundFlightsCount} | Out: ${a.outboundFlightsCount}`,
+//     )
+//     .join("\n");
+// }
 
 // =====================
 // BOT READY
@@ -219,16 +273,109 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   if (commandName === "inbound") {
     await interaction.deferReply();
-    const sessionId = await getSessionId();
-    const world = await getWorldOverview(sessionId);
 
-    if (!world.length) {
-      return interaction.editReply("📊 No traffic data available.");
+    try {
+      const mode = interaction.options.getString("mode") ?? "hour";
+
+      const sessionId = await getSessionId();
+
+      const [world, flights] = await Promise.all([
+        getWorldOverview(sessionId),
+        getFlights(sessionId),
+      ]);
+
+      const flightMap = new Map(flights.map((f) => [f.flightId, f]));
+
+      const candidates = world
+        .filter((a) => a.inboundFlightsCount > 0)
+        .sort((a, b) => b.inboundFlightsCount - a.inboundFlightsCount)
+        .slice(0, 20);
+
+      const stats = [];
+
+      for (const airport of candidates) {
+        const coords = await getAirportCoords(
+          airport.airportIcao.toUpperCase(),
+        );
+
+        if (!coords) continue;
+
+        let next20 = 0;
+        let next60 = 0;
+
+        for (const flightId of airport.inboundFlights) {
+          const flight = flightMap.get(flightId);
+
+          if (!flight) continue;
+          if (flight.speed < 100) continue;
+
+          const distance = distanceNm(
+            flight.latitude,
+            flight.longitude,
+            coords.lat,
+            coords.lon,
+          );
+
+          const etaMinutes = (distance / flight.speed) * 60;
+
+          if (etaMinutes <= 20) {
+            next20++;
+          } else if (etaMinutes <= 60) {
+            next60++;
+          }
+        }
+
+        stats.push({
+          icao: airport.airportIcao,
+          inbound: airport.inboundFlightsCount,
+          outbound: airport.outboundFlightsCount,
+          next20,
+          next60,
+          gtads: getGTADS(airport.atcFacilities),
+        });
+      }
+
+      if (mode === "total") {
+        stats.sort((a, b) => b.inbound - a.inbound);
+      } else {
+        stats.sort((a, b) => b.next20 + b.next60 - (a.next20 + a.next60));
+      }
+
+      const top10 = stats.slice(0, 10);
+
+      const output = top10
+        .map((a, i) => {
+          const atc = a.gtads === "—" ? "⚫ Uncontrolled" : `🟢 ${a.gtads}`;
+
+          if (mode === "total") {
+            return (
+              `**${i + 1}. ${a.icao}** ${atc}\n` +
+              `📥 Inbound: ${a.inbound}\n` +
+              `📤 Outbound: ${a.outbound}`
+            );
+          }
+
+          return (
+            `**${i + 1}. ${a.icao}** ${atc}\n` +
+            `🕒 <20 min: ${a.next20}\n` +
+            `🕓 20-60 min: ${a.next60}\n` +
+            `📥 Total Inbound: ${a.inbound}`
+          );
+        })
+        .join("\n\n");
+
+      return interaction.editReply(
+        `📊 **${
+          mode === "total"
+            ? "Top Airports by Total Inbound"
+            : "Top Airports by Next-Hour Arrivals"
+        }**\n\n${output}`,
+      );
+    } catch (err) {
+      console.error(err);
+
+      return interaction.editReply("⚠️ Failed to fetch inbound traffic.");
     }
-
-    return interaction.editReply(
-      `📊 **Top 10 Airports by Inbound Traffic**\n\n${formatInboundWithOutbound(world)}`,
-    );
   }
 });
 

@@ -83,3 +83,31 @@ export async function getWorldOverview(sessionId) {
 
   return res.data?.result ?? [];
 }
+
+// =====================
+// FLIGHTS
+// =====================
+
+export async function getFlights(sessionId) {
+  const res = await axios.get(`${BASE_URL}/sessions/${sessionId}/flights`, {
+    headers: {
+      Authorization: `Bearer ${process.env.IF_API_KEY}`,
+    },
+  });
+
+  return res.data?.result ?? [];
+}
+
+// =====================
+// AIRPORT INFO
+// =====================
+
+export async function getAirportInfo(icao) {
+  const res = await axios.get(`${BASE_URL}/airport/${icao}`, {
+    headers: {
+      Authorization: `Bearer ${process.env.IF_API_KEY}`,
+    },
+  });
+
+  return res.data?.result ?? null;
+}
