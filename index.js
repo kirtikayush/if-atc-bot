@@ -356,10 +356,10 @@ client.on("interactionCreate", async (interaction) => {
           }
 
           return (
-            `**${i + 1}. ${a.icao}** ${atc}\n` +
-            `🕒 <20 min: ${a.next20}\n` +
-            `🕓 20-60 min: ${a.next60}\n` +
-            `📥 Total Inbound: ${a.inbound}`
+            `**#${i + 1} ${a.icao}** ${atc}\n` +
+            `20m: ${String(a.next20).padStart(3)} | ` +
+            `60m: ${String(a.next60).padStart(3)} | ` +
+            `Total: ${String(a.inbound).padStart(3)}`
           );
         })
         .join("\n\n");
