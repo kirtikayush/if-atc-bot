@@ -80,7 +80,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /atis
   // =====================
-  if (commandName === "testatis") {
+  if (commandName === "atis") {
     await interaction.deferReply();
 
     try {
@@ -137,7 +137,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /atc
   // =====================
-  if (commandName === "testatc") {
+  if (commandName === "atc") {
     await interaction.deferReply();
     const sessionId = await getSessionId();
     const atcList = await getActiveATC(sessionId);
@@ -154,7 +154,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /inbound
   // =====================
-  if (commandName === "testinbound") {
+  if (commandName === "inbound") {
     await interaction.deferReply();
 
     try {
@@ -216,7 +216,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /userprofile
   // =====================
-  if (commandName === "testuserprofile") {
+  if (commandName === "userprofile") {
     await interaction.deferReply();
 
     try {
