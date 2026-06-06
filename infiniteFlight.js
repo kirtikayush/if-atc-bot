@@ -111,3 +111,28 @@ export async function getAirportInfo(icao) {
 
   return res.data?.result ?? null;
 }
+
+export async function getUserProfile(username) {
+  const res = await axios.post(
+    `${BASE_URL}/users`,
+    {
+      discourseNames: [username],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.IF_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (
+    res.data?.errorCode !== 0 ||
+    !res.data?.result ||
+    !res.data.result.length
+  ) {
+    return null;
+  }
+
+  return res.data.result[0];
+}

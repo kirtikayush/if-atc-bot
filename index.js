@@ -7,8 +7,13 @@ import {
   getWorldOverview,
   getFlights,
   getAirportInfo,
+  getUserProfile,
 } from "./infiniteFlight.js";
-import { parseATIS } from "./atisParser.js";
+import { parseATIS } from "./helpers/atisParser.js";
+import { buildInboundStats } from "./helpers/inbound.js";
+import { formatActiveATC, hasATISFrequency } from "./helpers/atc.js";
+import { ATC_RANKS, formatFlightTime } from "./helpers/user.js";
+import { createProfileCard } from "./helpers/profileCard.js";
 
 dotenv.config();
 
@@ -22,113 +27,6 @@ const client = new Client({
 
 const ATC_CHANNEL_ID = process.env.ATC_CHANNEL_ID;
 
-const airportCache = new Map();
-
-async function getAirportCoords(icao) {
-  const key = icao.toUpperCase();
-
-  if (airportCache.has(key)) {
-    return airportCache.get(key);
-  }
-
-  const airport = await getAirportInfo(key);
-
-  if (!airport) return null;
-
-  const coords = {
-    lat: airport.latitude,
-    lon: airport.longitude,
-  };
-
-  airportCache.set(key, coords);
-
-  return coords;
-}
-
-function deg2rad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-function distanceNm(lat1, lon1, lat2, lon2) {
-  const R = 3440.065;
-
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) ** 2;
-
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function getGTADS(atcFacilities = []) {
-  const types = atcFacilities.map((f) => f.type);
-
-  let result = "";
-
-  if (types.includes(0)) result += "G";
-  if (types.includes(1)) result += "T";
-  if (types.includes(4)) result += "A";
-  if (types.includes(5)) result += "D";
-  if (types.includes(7)) result += "S";
-
-  return result || "—";
-}
-// =====================
-// ATC HELPERS
-// =====================
-
-const ATC_TYPE_MAP = {
-  0: "GND",
-  1: "TWR",
-  2: "UNICOM",
-  3: "CLR",
-  4: "APP",
-  5: "DEP",
-  6: "CTR",
-  7: "ATIS",
-};
-
-function formatDuration(startTime) {
-  const start = new Date(startTime);
-  const diff = Date.now() - start;
-  const mins = Math.floor(diff / 60000);
-  const hrs = Math.floor(mins / 60);
-  return hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
-}
-
-function formatActiveATC(atcList) {
-  const grouped = {};
-  const centers = [];
-
-  for (const atc of atcList) {
-    const facility = ATC_TYPE_MAP[atc.type] ?? "UNK";
-    const name = atc.username ?? "Unknown";
-    const duration = formatDuration(atc.startTime);
-
-    if (atc.type === 6 || !atc.airportName) {
-      centers.push(`• **${facility}** — ${name} (${duration})`);
-      continue;
-    }
-
-    grouped[atc.airportName] ??= [];
-    grouped[atc.airportName].push(`• **${facility}** — ${name} (${duration})`);
-  }
-
-  const airportLines = Object.entries(grouped)
-    .sort()
-    .flatMap(([icao, lines]) => [`**${icao}**`, ...lines, ""]);
-
-  const centerLines = centers.length ? ["**CENTER ATC**", ...centers] : [];
-
-  return [...airportLines, ...centerLines].join("\n").trim();
-}
-
-function hasATISFrequency(atcList, icao) {
-  return atcList.some((a) => a.airportName === icao && a.type === 7);
-}
-
 function formatParsedATIS(parsed) {
   return [
     `INFO: ${parsed.information}`,
@@ -140,22 +38,6 @@ function formatParsedATIS(parsed) {
     `Remarks: ${parsed.remarks}`,
   ].join("\n");
 }
-
-// function formatInboundWithOutbound(worldData) {
-//   return worldData
-//     .filter((a) => a.inboundFlightsCount > 0)
-//     .sort((a, b) => b.inboundFlightsCount - a.inboundFlightsCount)
-//     .slice(0, 10)
-//     .map(
-//       (a, i) =>
-//         `**${i + 1}. ${a.airportIcao}** — ✈️ In: ${a.inboundFlightsCount} | Out: ${a.outboundFlightsCount}`,
-//     )
-//     .join("\n");
-// }
-
-// =====================
-// BOT READY
-// =====================
 
 client.once("ready", async () => {
   console.log(`🟢 ATC Bot online as ${client.user.tag}`);
@@ -198,7 +80,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /atis
   // =====================
-  if (commandName === "atis") {
+  if (commandName === "testatis") {
     await interaction.deferReply();
 
     try {
@@ -255,7 +137,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /atc
   // =====================
-  if (commandName === "atc") {
+  if (commandName === "testatc") {
     await interaction.deferReply();
     const sessionId = await getSessionId();
     const atcList = await getActiveATC(sessionId);
@@ -272,7 +154,7 @@ client.on("interactionCreate", async (interaction) => {
   // =====================
   // /inbound
   // =====================
-  if (commandName === "inbound") {
+  if (commandName === "testinbound") {
     await interaction.deferReply();
 
     try {
@@ -285,56 +167,7 @@ client.on("interactionCreate", async (interaction) => {
         getFlights(sessionId),
       ]);
 
-      const flightMap = new Map(flights.map((f) => [f.flightId, f]));
-
-      const candidates = world
-        .filter((a) => a.inboundFlightsCount > 0)
-        .sort((a, b) => b.inboundFlightsCount - a.inboundFlightsCount)
-        .slice(0, 20);
-
-      const stats = [];
-
-      for (const airport of candidates) {
-        const coords = await getAirportCoords(
-          airport.airportIcao.toUpperCase(),
-        );
-
-        if (!coords) continue;
-
-        let next20 = 0;
-        let next60 = 0;
-
-        for (const flightId of airport.inboundFlights) {
-          const flight = flightMap.get(flightId);
-
-          if (!flight) continue;
-          if (flight.speed < 100) continue;
-
-          const distance = distanceNm(
-            flight.latitude,
-            flight.longitude,
-            coords.lat,
-            coords.lon,
-          );
-
-          const etaMinutes = (distance / flight.speed) * 60;
-
-          if (etaMinutes <= 20) {
-            next20++;
-          } else if (etaMinutes <= 60) {
-            next60++;
-          }
-        }
-
-        stats.push({
-          icao: airport.airportIcao,
-          inbound: airport.inboundFlightsCount,
-          outbound: airport.outboundFlightsCount,
-          next20,
-          next60,
-          gtads: getGTADS(airport.atcFacilities),
-        });
-      }
+      const stats = await buildInboundStats(world, flights, getAirportInfo);
 
       if (mode === "total") {
         stats.sort((a, b) => b.inbound - a.inbound);
@@ -377,6 +210,47 @@ client.on("interactionCreate", async (interaction) => {
       console.error(err);
 
       return interaction.editReply("⚠️ Failed to fetch inbound traffic.");
+    }
+  }
+
+  // =====================
+  // /userprofile
+  // =====================
+  if (commandName === "testuserprofile") {
+    await interaction.deferReply();
+
+    try {
+      const username = interaction.options.getString("username");
+
+      const user = await getUserProfile(username);
+
+      if (!user) {
+        return interaction.editReply(`❌ User "${username}" not found.`);
+      }
+
+      const totalViolations =
+        (user.violationCountByLevel?.level1 ?? 0) +
+        (user.violationCountByLevel?.level2 ?? 0) +
+        (user.violationCountByLevel?.level3 ?? 0);
+
+      const profile = [
+        `# ${user.discourseUsername}`,
+        `${ATC_RANKS[user.atcRank]} • Grade ${user.grade}`,
+        "",
+        "```",
+        `Flights      │ ${user.onlineFlights.toLocaleString()}`,
+        `Landings     │ ${user.landingCount.toLocaleString()}`,
+        `Flight Time  │ ${formatFlightTime(user.flightTime)}`,
+        `ATC Ops      │ ${user.atcOperations.toLocaleString()}`,
+        `XP           │ ${user.xp.toLocaleString()}`,
+        `Violations   │ ${totalViolations}`,
+        "```",
+      ].join("\n");
+
+      return interaction.editReply(profile);
+    } catch (err) {
+      console.error(err);
+      return interaction.editReply("⚠️ Failed to fetch user profile.");
     }
   }
 });

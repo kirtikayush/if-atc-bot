@@ -5,7 +5,7 @@ dotenv.config();
 
 const commands = [
   new SlashCommandBuilder()
-    .setName("atis")
+    .setName("testatis")
     .setDescription("Get ATIS for an airport")
     .addStringOption((option) =>
       option
@@ -14,10 +14,12 @@ const commands = [
         .setRequired(true),
     ),
 
-  new SlashCommandBuilder().setName("atc").setDescription("Show active ATC"),
+  new SlashCommandBuilder()
+    .setName("testatc")
+    .setDescription("Show active ATC"),
 
   new SlashCommandBuilder()
-    .setName("inbound")
+    .setName("testinbound")
     .setDescription("Inbound traffic statistics")
     .addStringOption((option) =>
       option
@@ -28,6 +30,16 @@ const commands = [
           { name: "Hour", value: "hour" },
           { name: "Total", value: "total" },
         ),
+    ),
+
+  new SlashCommandBuilder()
+    .setName("testuserprofile")
+    .setDescription("Get Infinite Flight user profile")
+    .addStringOption((option) =>
+      option
+        .setName("username")
+        .setDescription("IFC Username")
+        .setRequired(true),
     ),
 ].map((cmd) => cmd.toJSON());
 
