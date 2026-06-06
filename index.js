@@ -13,7 +13,7 @@ import { parseATIS } from "./helpers/atisParser.js";
 import { buildInboundStats } from "./helpers/inbound.js";
 import { formatActiveATC, hasATISFrequency } from "./helpers/atc.js";
 import { ATC_RANKS, formatFlightTime } from "./helpers/user.js";
-import { createProfileCard } from "./helpers/profileCard.js";
+// import { createProfileCard } from "./helpers/profileCard.js";
 
 dotenv.config();
 
