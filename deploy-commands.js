@@ -39,6 +39,19 @@ const commands = [
         .setDescription("IFC Username")
         .setRequired(true),
     ),
+
+  new SlashCommandBuilder()
+    .setName("ops")
+    .setDescription("Show ATC session statistics")
+    .addStringOption((option) =>
+      option
+        .setName("username")
+        .setDescription("IFC username")
+        .setRequired(true),
+    )
+    .addIntegerOption((option) =>
+      option.setName("page").setDescription("History page").setRequired(false),
+    ),
 ].map((cmd) => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);

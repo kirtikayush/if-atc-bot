@@ -8,12 +8,13 @@ import {
   getFlights,
   getAirportInfo,
   getUserProfile,
+  getATCHistory,
 } from "./infiniteFlight.js";
 import { parseATIS } from "./helpers/atisParser.js";
 import { buildInboundStats } from "./helpers/inbound.js";
 import { formatActiveATC, hasATISFrequency } from "./helpers/atc.js";
 import { ATC_RANKS, formatFlightTime } from "./helpers/user.js";
-// import { createProfileCard } from "./helpers/profileCard.js";
+import { buildATCSession, getFrequencyNames } from "./helpers/ops.js";
 
 dotenv.config();
 
@@ -251,6 +252,92 @@ client.on("interactionCreate", async (interaction) => {
     } catch (err) {
       console.error(err);
       return interaction.editReply("⚠️ Failed to fetch user profile.");
+    }
+  }
+
+  // =====================
+  // /ops
+  // =====================
+
+  if (commandName === "ops") {
+    await interaction.deferReply();
+
+    try {
+      const username = interaction.options.getString("username");
+
+      const page = interaction.options.getInteger("page") ?? 1;
+
+      const user = await getUserProfile(username);
+
+      if (!user) {
+        return interaction.editReply(`❌ User "${username}" not found.`);
+      }
+
+      const history = await getATCHistory(user.userId, page);
+
+      if (!history?.data?.length) {
+        return interaction.editReply("No ATC history found.");
+      }
+
+      const sessions = buildATCSession(history.data);
+
+      const output = sessions
+        .map((session, index) => {
+          const hours = session.totalTime / 60;
+
+          const opsPerHour =
+            hours > 0 ? (session.totalOps / hours).toFixed(1) : "0";
+
+          const frequencyLines = [];
+
+          if (session.frequencyTypes.has(0)) {
+            frequencyLines.push(`Ground Ops    │ ${session.groundOps}`);
+          }
+
+          if (session.frequencyTypes.has(1)) {
+            frequencyLines.push(`Tower Ops     │ ${session.towerOps}`);
+          }
+
+          if (session.frequencyTypes.has(4)) {
+            frequencyLines.push(`Approach Ops  │ ${session.approachOps}`);
+          }
+
+          if (session.frequencyTypes.has(5)) {
+            frequencyLines.push(`Departure Ops │ ${session.departureOps}`);
+          }
+
+          if (session.frequencyTypes.has(6)) {
+            frequencyLines.push(`Center Ops    │ ${session.centerOps}`);
+          }
+
+          // console.log("Page:", page);
+          // console.log("Rows returned:", history.data.length);
+
+          // const sessions = buildATCSession(history.data);
+
+          // console.log("Sessions after grouping:", sessions.length);
+
+          return [
+            `**${index + 1}. ${session.airport}**\`\`\``,
+            `Controlled    │ ${getFrequencyNames(session)}`,
+            `Server        │ ${session.server}`,
+            `Total Ops     │ ${session.totalOps}`,
+            `Ops / Hour    │ ${opsPerHour}`,
+            ...frequencyLines,
+            `Violations    │ ${session.violations}`,
+            `Duration      │ ${Math.round(session.totalTime)}m`,
+            "```",
+          ].join("\n");
+        })
+        .join("\n");
+
+      return interaction.editReply(
+        `# ${user.discourseUsername}\nPage ${page}\n\n${output}`,
+      );
+    } catch (err) {
+      console.error(err);
+
+      return interaction.editReply("⚠️ Failed to fetch ATC stats.");
     }
   }
 });

@@ -136,3 +136,13 @@ export async function getUserProfile(username) {
 
   return res.data.result[0];
 }
+
+export async function getATCHistory(userId, page = 1) {
+  const res = await axios.get(`${BASE_URL}/users/${userId}/atc?page=${page}`, {
+    headers: {
+      Authorization: `Bearer ${process.env.IF_API_KEY}`,
+    },
+  });
+
+  return res.data?.result ?? null;
+}
