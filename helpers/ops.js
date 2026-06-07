@@ -41,6 +41,7 @@ export function buildATCSession(data) {
         airport:
           row.facility.airportIcao ??
           (row.facility.frequencyType === 6 ? "CENTER" : "Unknown"),
+
         facilities: new Set(),
         frequencyTypes: new Set(),
         totalOps: 0,
@@ -52,10 +53,15 @@ export function buildATCSession(data) {
         violations: 0,
         totalTime: 0,
         server: SERVER_MAP[row.worldType] ?? "Unknown",
+        startTime: row.created,
       });
     }
 
     const session = groups.get(groupId);
+
+    if (new Date(row.created) < new Date(session.startTime)) {
+      session.startTime = row.created;
+    }
 
     const type = row.facility.frequencyType;
 

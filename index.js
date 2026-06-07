@@ -28,6 +28,19 @@ const client = new Client({
 
 const ATC_CHANNEL_ID = process.env.ATC_CHANNEL_ID;
 
+function formatSessionTime(dateString) {
+  const date = new Date(dateString);
+
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear()).slice(-2);
+
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${hh}${mm}Z`;
+}
+
 function formatParsedATIS(parsed) {
   return [
     `INFO: ${parsed.information}`,
@@ -319,8 +332,9 @@ client.on("interactionCreate", async (interaction) => {
 
           return [
             `**${index + 1}. ${session.airport}**\`\`\``,
-            `Controlled    │ ${getFrequencyNames(session)}`,
             `Server        │ ${session.server}`,
+            `Controlled    │ ${getFrequencyNames(session)}`,
+            `Time          │ ${formatSessionTime(session.startTime)}`,
             `Total Ops     │ ${session.totalOps}`,
             `Ops / Hour    │ ${opsPerHour}`,
             ...frequencyLines,
